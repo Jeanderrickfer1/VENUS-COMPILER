@@ -39,4 +39,3 @@ class MainActivity : AppCompatActivity() {
         setContentView(layout)
     }
 }
-
