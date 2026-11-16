@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Venus Compiler - Compilateur Web Android</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --accent: #ec4899;
+            --accent-hover: #db2777;
+            --text: #f8fafc;
+            --muted: #94a3b8;
+            --border: #334155;
+        }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 950px;
+            background: var(--card);
+            padding: 25px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        }
+        h1 { margin-top: 0; font-size: 1.6rem; color: var(--accent); }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; }
+        label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 5px; }
+        input, select, textarea {
+            width: 100%;
+            background: #0f172a;
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 10px;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-family: monospace;
+        }
+        textarea { height: 200px; resize: vertical; }
+        .file-list {
+            background: #0f172a;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            margin-bottom: 15px;
+            min-height: 45px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        .file-badge {
+            display: inline-flex;
+            align-items: center;
+            background: #334155;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            margin: 3px;
+            font-family: monospace;
+        }
+        .file-badge span { color: #f87171; cursor: pointer; margin-left: 8px; font-weight: bold; }
+        .btn {
+            background: var(--accent);
+            color: #fff;
+            font-weight: bold;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: 0.2s;
+        }
+        .btn:hover { background: var(--accent-hover); }
+        .btn-secondary { background: #3b82f6; color: white; margin-right: 10px; }
+        .logs {
+            margin-top: 20px;
+            background: #000;
+            color: #22c55e;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+            max-height: 220px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🪐 Venus Compiler</h1>
+    <p style="color: var(--muted); font-size: 0.9rem;">Glisse ou importe tes fichiers sources : le compilateur détecte automatiquement leur emplacement.</p>
+
+    <!-- Configuration GitHub -->
+    <div class="grid">
+        <div>
+            <label>Utilisateur GitHub</label>
+            <input type="text" id="ghUser" value="Jeanderrickfer1">
+        </div>
+        <div>
+            <label>Dépôt Moteur (venus-compiler)</label>
+            <input type="text" id="ghRepo" value="venus-compiler">
+        </div>
+    </div>
+    <div style="margin-bottom: 20px;">
+        <label>GitHub Personal Access Token (permissions: repo, workflow)</label>
+        <input type="password" id="ghToken" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
+    </div>
+
+    <hr style="border-color: var(--border); margin: 20px 0;">
+
+    <!-- Importation -->
+    <div style="margin-bottom: 15px;">
+        <label style="font-weight: bold; color: var(--text);">📁 Importer un fichier source (Détection automatique) :</label>
+        <input type="file" id="fileInput" onchange="handleFileImport(event)" style="padding: 12px; background: #0f172a; border: 2px dashed var(--border); cursor: pointer;">
+    </div>
+
+    <div class="grid">
+        <div>
+            <label>Chemin cible exact dans le projet</label>
+            <input type="text" id="filePath" placeholder="ex: app/src/main/java/com/jeanderrickdefercitegetse/venus/MainActivity.kt">
+        </div>
+        <div>
+            <label>Action rapide</label>
+            <button class="btn btn-secondary" style="width: 100%; padding: 10px;" onclick="addFileToQueue()">+ Ajouter à la file</button>
+        </div>
+    </div>
+
+    <div style="margin-bottom: 15px;">
+        <label>Code source du fichier :</label>
+        <textarea id="fileContent" placeholder="Le code apparaîtra ici..."></textarea>
+    </div>
+
+    <div style="margin-bottom: 15px;">
+        <label>Fichiers prêts pour la compilation :</label>
+        <div class="file-list" id="fileList">Aucun fichier dans la file.</div>
+    </div>
+
+    <button class="btn" style="width: 100%;" onclick="compileApp()">🚀 Lancer la Compilation Cloud (Générer l'APK)</button>
+
+    <div class="logs" id="logs">Venus Compiler prêt. Importe tes fichiers pour commencer.</div>
+</div>
+
+<script>
+    const projectFiles = {};
+    const basePackagePath = "app/src/main/java/com/jeanderrickdefercitegetse/venus";
+
+    function log(msg) {
+        const logsDiv = document.getElementById('logs');
+        logsDiv.textContent += `\n[${new Date().toLocaleTimeString()}] ${msg}`;
+        logsDiv.scrollTop = logsDiv.scrollHeight;
+    }
+
+    function handleFileImport(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const content = e.target.result;
+            const fileName = file.name;
+            document.getElementById('fileContent').value = content;
+
+            let detectedPath = "";
+            if (fileName === "AndroidManifest.xml") {
+                detectedPath = "app/src/main/AndroidManifest.xml";
+            } else if (fileName.endsWith(".kt")) {
+                detectedPath = `${basePackagePath}/${fileName}`;
+            } else if (fileName.endsWith(".xml")) {
+                if (content.includes("LinearLayout") || content.includes("ConstraintLayout") || content.includes("FrameLayout")) {
+                    detectedPath = `app/src/main/res/layout/${fileName}`;
+                } else if (content.includes("shape") || content.includes("selector")) {
+                    detectedPath = `app/src/main/res/drawable/${fileName}`;
+                } else {
+                    detectedPath = `app/src/main/res/values/${fileName}`;
+                }
+            } else {
+                detectedPath = `app/src/main/assets/${fileName}`;
+            }
+
+            document.getElementById('filePath').value = detectedPath;
+            log(`✨ Fichier classé automatiquement : ${detectedPath}`);
+        };
+        reader.readAsText(file);
+    }
+
+    function addFileToQueue() {
+        const path = document.getElementById('filePath').value.trim();
+        const content = document.getElementById('fileContent').value;
+        if (!path || !content) {
+            alert("Remplis le chemin et le code.");
+            return;
+        }
+        projectFiles[path] = content;
+        renderFileList();
+        log(`Ajouté à la file : ${path}`);
+    }
+
+    function removeFile(path) {
+        delete projectFiles[path];
+        renderFileList();
+        log(`Retiré : ${path}`);
+    }
+
+    function renderFileList() {
+        const listDiv = document.getElementById('fileList');
+        const keys = Object.keys(projectFiles);
+        if (keys.length === 0) {
+            listDiv.textContent = "Aucun fichier dans la file.";
+            return;
+        }
+        listDiv.innerHTML = keys.map(k => `<span class="file-badge">📄 ${k} <span onclick="removeFile('${k}')">×</span></span>`).join('');
+    }
+
+    function toBase64(str) {
+        return btoa(unescape(encodeURIComponent(str)));
+    }
+
+    async function compileApp() {
+        const user = document.getElementById('ghUser').value.trim();
+        const repo = document.getElementById('ghRepo').value.trim();
+        const token = document.getElementById('ghToken').value.trim();
+        const files = Object.keys(projectFiles);
+
+        if (!user || !repo || !token) {
+            alert("Remplis tes identifiants GitHub.");
+            return;
+        }
+        if (files.length === 0) {
+            alert("Ajoute au moins un fichier.");
+            return;
+        }
+
+        log("🚀 Envoi vers GitHub Actions...");
+        const headers = {
+            "Authorization": `Bearer ${token}`,
+            "Accept": "application/vnd.github.v3+json",
+            "Content-Type": "application/json"
+        };
+
+        try {
+            for (const path of files) {
+                log(`Envoi de ${path}...`);
+                const url = `https://api.github.com/repos/${user}/${repo}/contents/${path}`;
+                
+                let sha = null;
+                const getRes = await fetch(url, { headers });
+                if (getRes.ok) {
+                    const data = await getRes.json();
+                    sha = data.sha;
+                }
+
+                const body = {
+                    message: `Venus Compiler update ${path}`,
+                    content: toBase64(projectFiles[path])
+                };
+                if (sha) body.sha = sha;
+
+                const putRes = await fetch(url, { method: "PUT", headers, body: JSON.stringify(body) });
+                if (!putRes.ok) {
+                    const err = await putRes.json();
+                    throw new Error(`Erreur sur ${path}: ${err.message}`);
+                }
+            }
+
+            log("✅ Fichiers reçus par GitHub !");
+            log("⚙️ Compilation Gradle lancée...");
+            log(`🔗 Télécharge ton APK ici dans ~2 minutes :\nhttps://github.com/${user}/${repo}/actions`);
+
+        } catch (error) {
+            log(`❌ Erreur : ${error.message}`);
+        }
+    }
+</script>
+
+</body>
+</html>
